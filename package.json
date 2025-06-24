@@ -11,11 +11,19 @@
     "deploy:full": "npm run build:ui && git add . && git commit -m 'deploy(full): ui-prod build' && git push",
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ."
   },
   "dependencies": {
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "mongoose": "^8.16.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.29.0",
+    "@stylistic/eslint-plugin": "^5.0.0",
+    "@stylistic/eslint-plugin-js": "^4.4.1",
+    "eslint": "^9.29.0",
+    "globals": "^16.2.0"
   }
 }
