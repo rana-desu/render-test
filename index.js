@@ -4,8 +4,10 @@
 
 // express is a node module which makes it easaier to work with web-server
 // and the built-in http module for node by providing a bunch of abstractions.
-const express = require('express')
-const cors = require('cors')
+require('dotenv').config()
+
+const express  = require('express')
+const Note = require('./models/notes')
 
 const app = express() // initialise app with express function
 
@@ -15,28 +17,8 @@ const app = express() // initialise app with express function
 
 // cors is a middleware used as a workaround for the same origin policy
 // (that is used for security reasons).
-app.use(express.json())
-app.use(cors())
-
 app.use(express.static('dist'))
-
-let notes = [
-    {
-        id: "1",
-        content: "HTML is easy",
-        important: true
-    },
-    {
-        id: "2",
-        content: "CSS is easy",
-        important: false
-    },
-    {
-        id: "3",
-        content: "JavaScript is shit",
-        important: true
-    },    
-]
+app.use(express.json())
 
 /* createServer method of the http module is used to create a new web server
  * an anonymous function is passed as the argument for the createServer method
@@ -70,61 +52,87 @@ app.get('/', (request, response) => {
 })
 
 app.get('/api/notes', (request, response) => {
-    response.json(notes)
+    Note.find({}).then(notes => {
+        response.json(notes)
+    })
 })
 
-app.get('/api/notes/:id', (request, response) => {
-    const id = request.params.id
-    const note = notes.find(note => note.id === id)
-    
-    if (note) {
-        response.json(note)
-    } else {
-        response.status(404).end()
-    }
-})
-
-app.delete('/api/notes/:id', (request, response) => {
-    const id = request.params.id
-    notes = notes.filter(note => note.id !== id)
-
-    response.status(204).end()
-})
-
-const generateId = () => {
-    const maxId = notes.length > 0
-        ? Math.max(...notes.map(n => Number(n.id)))
-        : 0
-    // the above block does the following:
-    // assigns the highest value of ID available from the current state of notes
-    // meaning, the new note is always assigned with the highest ID + 1.
-
-    return maxId + 1
-}
-
-app.post('/api/notes', (request, response) => {
-    const body = request.body // without json-parser, this would be undefined (or if it isn't JSON)
-
-    if (!body.content) {
-        return response.status(400).json({
-            error: 'content missing'
+app.get('/api/notes/:id', (request, response, next) => {
+    Note.findById(request.params.id)
+        .then(note => {
+            if (note) {
+                response.json(note)
+            } else {
+                response.status(404).end()
+            }
         })
-    }
+        .catch(error => next(error))
+})
+
+
+app.post('/api/notes', (request, response, next) => {
+    const body = request.body
     
-    // only take the fields we want from the request body
-    const note = {
+    const note = new Note({
         content: body.content,
         important: body.important || false,
-        id: generateId(),
-    }
-
-    notes = notes.concat(note)
+    })
     
-    response.json(note)
+    note.save()
+        .then(savedNote => {
+            response.json(savedNote)
+        })
+        .catch(error => next(error))
 })
 
+app.delete('/api/notes/:id', (request, response, next) => {
+    Note.findByIdAndDelete(request.params.id)
+        .then(result => {
+            response.status(204).end()
+        })
+        .catch(error => next(error))
+})
+
+app.put('/api/notes/:id', (request, response, next) => {
+    const { content, important } = request.body
+
+    Note.findById(request.params.id)
+        .then(note => {
+            if (!note) {
+                return response.status(404).end()
+            }
+
+            note.content = content
+            note.important = important
+
+            return note.save().then(updatedNote => {
+                response.json(updatedNote)
+            })
+        })
+        .catch(error => next(error))
+})
+
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({ error: 'unkown endpoint' })
+}
+app.use(unknownEndpoint)
+
+// has to be the last loaded middlewear
+const errorHandler = (error, request, response, next) => {
+    console.log(error.message)
+
+    if (error.name === 'CastError') {
+        return response.status(400).send({ error: 'malformatted id' })
+    } else if (error.name === 'ValidationError') {
+        return response.status(400).json({ error: error.message })
+    }
+
+    next(error)
+}
+app.use(errorHandler)
+
 // binds the app to listen to the requests made on the PORT
-const PORT = process.env.port || 3001
+const PORT = process.env.PORT
 app.listen(PORT, () => {
     console.log(`server running on port: ${PORT}`)
 })
